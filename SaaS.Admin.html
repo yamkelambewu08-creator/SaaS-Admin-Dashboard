@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SaaS Admin Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          primary: {
+            50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc',
+            400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca',
+            800: '#3730a3', 900: '#312e81',
+          }
+        }
+      }
+    }
+  }
+</script>
+<style>
+  :root {
+    --sidebar-width: 260px; --sidebar-collapsed: 72px;
+    --bg-body: #f1f5f9; --bg-card: #ffffff;
+    --text-primary: #0f172a; --text-secondary: #64748b;
+    --border-color: #e2e8f0; --sidebar-bg: #ffffff; --header-bg: #ffffff;
+  }
+  .dark {
+    --bg-body: #0f172a; --bg-card: #1e293b;
+    --text-primary: #f8fafc; --text-secondary: #94a3b8;
+    --border-color: #334155; --sidebar-bg: #1e293b; --header-bg: #1e293b;
+  }
+  body { background-color: var(--bg-body); color: var(--text-primary); font-family: ui-sans-serif,system-ui,-apple-system,sans-serif; transition: background-color 0.3s, color 0.3s; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
+  .dark ::-webkit-scrollbar-thumb { background: #475569; }
+  .sidebar { width: var(--sidebar-width); background: var(--sidebar-bg); border-right: 1px solid var(--border-color); transition: width 0.3s, background 0.3s; position: fixed; top:0; left:0; bottom:0; z-index:40; display:flex; flex-direction:column; }
+  .sidebar.collapsed { width: var(--sidebar-collapsed); }
+  .sidebar.collapsed .nav-text, .sidebar.collapsed .logo-text, .sidebar.collapsed .sidebar-footer { opacity:0; pointer-events:none; }
+  .sidebar.collapsed .nav-item { justify-content:center; padding-left:0; padding-right:0; }
+  .main-content { margin-left: var(--sidebar-width); transition: margin-left 0.3s; min-height:100vh; display:flex; flex-direction:column; }
+  .sidebar.collapsed ~ .main-content { margin-left: var(--sidebar-collapsed); }
+  @media (max-width:1024px) { .sidebar { transform:translateX(-100%); } .sidebar.open { transform:translateX(0); } .main-content { margin-left:0; } .sidebar.collapsed ~ .main-content { margin-left:0; } .sidebar-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:35; opacity:0; pointer-events:none; transition:opacity 0.3s; } .sidebar-overlay.open { opacity:1; pointer-events:auto; } }
+  .nav-item { display:flex; align-items:center; gap:12px; padding:10px 16px; margin:2px 12px; border-radius:8px; color:var(--text-secondary); font-size:0.875rem; font-weight:500; cursor:pointer; transition:all 0.2s; white-space:nowrap; overflow:hidden; }
+  .nav-item:hover { background:var(--bg-body); color:var(--text-primary); }
+  .nav-item.active { background:rgba(99,102,241,0.1); color:#6366f1; }
+  .dark .nav-item.active { background:rgba(99,102,241,0.15); color:#818cf8; }
+  .dashboard-card { background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px; padding:20px; transition:background 0.3s, border-color 0.3s, box-shadow 0.3s; }
+  .dashboard-card:hover { box-shadow:0 4px 20px rgba(0,0,0,0.05); }
+  .dark .dashboard-card:hover { box-shadow:0 4px 20px rgba(0,0,0,0.2); }
+  .data-table { width:100%; border-collapse:collapse; }
+  .data-table th { text-align:left; padding:12px 16px; font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary); border-bottom:1px solid var(--border-color); cursor:pointer; }
+  .data-table th:hover { color:var(--text-primary); }
+  .data-table td { padding:14px 16px; font-size:0.875rem; border-bottom:1px solid var(--border-color); color:var(--text-primary); }
+  .data-table tbody tr:hover { background:var(--bg-body); }
+  .data-table tbody tr:last-child td { border-bottom:none; }
+  .badge { display:inline-flex; align-items:center; padding:4px 10px; border-radius:9999px; font-size:0.75rem; font-weight:600; }
+  .badge-green { background:#dcfce7; color:#166534; } .dark .badge-green { background:rgba(22,101,52,0.2); color:#86efac; }
+  .badge-yellow { background:#fef9c3; color:#854d0e; } .dark .badge-yellow { background:rgba(133,77,14,0.2); color:#fde047; }
+  .badge-red { background:#fee2e2; color:#991b1b; } .dark .badge-red { background:rgba(153,27,27,0.2); color:#fca5a5; }
+  .badge-blue { background:#dbeafe; color:#1e40af; } .dark .badge-blue { background:rgba(30,64,175,0.2); color:#93c5fd; }
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:50; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.2s; }
+  .modal-overlay.open { opacity:1; pointer-events:auto; }
+  .modal-content { background:var(--bg-card); border:1px solid var(--border-color); border-radius:16px; width:100%; max-width:480px; max-height:90vh; overflow-y:auto; transform:scale(0.95); transition:transform 0.2s; margin:16px; }
+  .modal-overlay.open .modal-content { transform:scale(1); }
+  .toast-container { position:fixed; top:20px; right:20px; z-index:60; display:flex; flex-direction:column; gap:8px; }
+  .toast { background:var(--bg-card); border:1px solid var(--border-color); border-radius:10px; padding:14px 18px; box-shadow:0 10px 40px rgba(0,0,0,0.15); display:flex; align-items:center; gap:10px; min-width:300px; animation:slideIn 0.3s ease; font-size:0.875rem; }
+  @keyframes slideIn { from { transform:translateX(100%); opacity:0; } to { transform:translateX(0); opacity:1; } }
+  .dropdown-menu { position:absolute; right:0; top:calc(100% + 8px); background:var(--bg-card); border:1px solid var(--border-color); border-radius:10px; box-shadow:0 10px 40px rgba(0,0,0,0.1); min-width:200px; z-index:30; opacity:0; pointer-events:none; transform:translateY(-4px); transition:all 0.2s; }
+  .dropdown-menu.open { opacity:1; pointer-events:auto; transform:translateY(0); }
+  .form-input { width:100%; padding:10px 14px; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-card); color:var(--text-primary); font-size:0.875rem; transition:border-color 0.2s, box-shadow 0.2s; }
+  .form-input:focus { outline:none; border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,0.1); }
+  .form-label { display:block; font-size:0.875rem; font-weight:500; color:var(--text-primary); margin-bottom:6px; }
+  .form-group { margin-bottom:16px; }
+  .chart-container { position:relative; height:280px; }
+  .section-content { display:none; animation:fadeIn 0.3s ease; }
+  .section-content.active { display:block; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+  .counter { font-variant-numeric:tabular-nums; }
+  .pagination-btn { padding:6px 12px; border-radius:6px; font-size:0.875rem; font-weight:500; color:var(--text-secondary); border:1px solid var(--border-color); background:var(--bg-card); cursor:pointer; transition:all 0.2s; }
+  .pagination-btn:hover { background:var(--bg-body); color:var(--text-primary); }
+  .pagination-btn.active { background:#6366f1; color:white; border-color:#6366f1; }
+  .pagination-btn:disabled { opacity:0.4; cursor:not-allowed; }
+</style>
+<base target="_blank">
+</head>
+<body class="antialiased">
+
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+<aside class="sidebar" id="sidebar">
+  <div class="flex items-center gap-3 px-5 py-5 border-b border-[var(--border-color)]">
+    <div class="w-9 h-9 rounded-lg bg-primary-600 flex items-center justify-center flex-shrink-0">
+      <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+    </div>
+    <span class="logo-text font-bold text-lg text-[var(--text-primary)] transition-opacity duration-300">AdminDash</span>
+  </div>
+  <nav class="flex-1 py-4 overflow-y-auto overflow-x-hidden">
+    <div class="px-4 mb-2"><span class="nav-text text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider transition-opacity duration-300">Main</span></div>
+    <a class="nav-item active" onclick="switchSection('dashboard',this)">
+      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+      <span class="nav-text transition-opacity duration-300">Dashboard</span>
+    </a>
+    <a class="nav-item" onclick="switchSection('analytics',this)">
+      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+      <span class="nav-text transition-opacity duration-300">Analytics</span>
+    </a>
+    <a class="nav-item" onclick="switchSection('customers',this)">
+      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+      <span class="nav-text transition-opacity duration-300">Customers</span>
+    </a>
+    <a class="nav-item" onclick="switchSection('orders',this)">
+      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+      <span class="nav-text transition-opacity duration-300">Orders</span>
+    </a>
+    <div class="px-4 mt-6 mb-2"><span class="nav-text text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider transition-opacity duration-300">Management</span></div>
+    <a class="nav-item" onclick="switchSection('products',this)">
+      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+      <span class="nav-text transition-opacity duration-300">Products</span>
+    </a>
+    <a class="nav-item" onclick="switchSection('settings',this)">
+      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+      <span class="nav-text transition-opacity duration-300">Settings</span>
+    </a>
+  </nav>
+  <div class="sidebar-footer p-4 border-t border-[var(--border-color)] transition-opacity duration-300">
+    <div class="flex items-center gap-3 px-2">
+      <div class="w-9 h-9 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400 font-bold text-sm">JD</div>
+      <div class="overflow-hidden">
+        <p class="text-sm font-semibold text-[var(--text-primary)] truncate">John Doe</p>
+        <p class="text-xs text-[var(--text-secondary)] truncate">admin@example.com</p>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<main class="main-content">
+  <header class="sticky top-0 z-30 bg-[var(--header-bg)] border-b border-[var(--border-color)] px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <button onclick="toggleSidebar()" class="lg:hidden p-2 rounded-lg hover:bg-[var(--bg-body)] text-[var(--text-secondary)] transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+      </button>
+      <button onclick="toggleSidebarCollapse()" class="hidden lg:flex p-2 rounded-lg hover:bg-[var(--bg-body)] text-[var(--text-secondary)] transition-colors" title="Toggle sidebar">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+      </button>
+      <div class="relative hidden sm:block">
+        <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+        <input type="text" id="globalSearch" placeholder="Search..." class="form-input pl-9 w-64" onkeyup="handleGlobalSearch(event)">
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <button onclick="toggleTheme()" class="p-2 rounded-lg hover:bg-[var(--bg-body)] text-[var(--text-secondary)] transition-colors" title="Toggle theme">
+        <svg id="themeIconSun" class="w-5 h-5 hidden dark:block text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+        <svg id="themeIconMoon" class="w-5 h-5 block dark:hidden text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+      </button>
+      <div class="relative">
+        <button onclick="toggleDropdown('notifDropdown')" class="p-2 rounded-lg hover:bg-[var(--bg-body)] text-[var(--text-secondary)] transition-colors relative">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+          <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
+        </button>
+        <div id="notifDropdown" class="dropdown-menu">
+          <div class="px-4 py-3 border-b border-[var(--border-color)]"><p class="text-sm font-semibold text-[var(--text-primary)]">Notifications</p></div>
+          <div class="py-2">
+            <div class="px-4 py-2 hover:bg-[var(--bg-body)] cursor-pointer"><p class="text-sm text-[var(--text-primary)]">New order received</p><p class="text-xs text-[var(--text-secondary)]">2 minutes ago</p></div>
+            <div class="px-4 py-2 hover:bg-[var(--bg-body)] cursor-pointer"><p class="text-sm text-[var(--text-primary)]">Customer signed up</p><p class="text-xs text-[var(--text-secondary)]">15 minutes ago</p></div>
+            <div class="px-4 py-2 hover:bg-[var(--bg-body)] cursor-pointer"><p class="text-sm text-[var(--text-primary)]">Payment processed</p><p class="text-xs text-[var(--text-secondary)]">1 hour ago</p></div>
+          </div>
+        </div>
+      </div>
+      <div class="relative">
+        <button onclick="toggleDropdown('profileDropdown')" class="flex items-center gap-2 p-1 rounded-lg hover:bg-[var(--bg-body)] transition-colors">
+          <div class="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400 font-bold text-xs">JD</div>
+          <svg class="w-4 h-4 text-[var(--text-secondary)] hidden sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+        </button>
+        <div id="profileDropdown" class="dropdown-menu">
+          <div class="py-2">
+            <a class="block px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-body)]">Profile</a>
+            <a class="block px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-body)]">Billing</a>
+            <a class="block px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-body)]">Settings</a>
+            <div class="border-t border-[var(--border-color)] my-1"></div>
+            <a class="block px-4 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20">Sign out</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="flex-1 p-4 sm:p-6 lg:p-8">
+
+    <!-- DASHBOARD SECTION -->
+    <div id="section-dashboard" class="section-content active">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-2xl font-bold text-[var(--text-primary)]">Dashboard</h1>
+          <p class="text-sm text-[var(--text-secondary)] mt-1">Welcome back, here is what is happening today.</p>
+        </div>
+        <button onclick="openModal('addCustomerModal')" class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+          Add Customer
+        </button>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="dashboard-card">
+          <div class="flex items-center justify-between mb-3">
+            <div class="w-10 h-10 rounded-lg bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
+              <svg class="w-5 h-5 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+            <span class="badge badge-green flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>12.5%</span>
+          </div>
+          <p class="text-2xl font-bold text-[var(--text-primary)] counter" data-target="48290" data-prefix="$">$0</p>
+          <p class="text-sm text-[var(--text-secondary)] mt-1">Total Revenue</p>
+        </div>
+        <div class="dashboard-card">
+          <div class="flex items-center justify-between mb-3">
+            <div class="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+              <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+            </div>
+            <span class="badge badge-green flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>8.2%</span>
+          </div>
+          <p class="text-2xl font-bold text-[var(--text-primary)] counter" data-target="2847">0</p>
+          <p class="text-sm text-[var(--text-secondary)] mt-1">Active Users</p>
+        </div>
+        <div class="dashboard-card">
+          <div class="flex items-center justify-between mb-3">
+            <div class="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+              <svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+            </div>
+            <span class="badge badge-red flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>2.1%</span>
+          </div>
+          <p class="text-2xl font-bold text-[var(--text-primary)] counter" data-target="1256">0</p>
+          <p class="text-sm text-[var(--text-secondary)] mt-1">Total Orders</p>
+        </div>
+        <div class="dashboard-card">
+          <div class="flex items-center justify-between mb-3">
+            <div class="w-10 h-10 rounded-lg bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
+              <svg class="w-5 h-5 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+            </div>
+            <span class="badge badge-green flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>4.3%</span>
+          </div>
+          <p class="text-2xl font-bold text-[var(--text-primary)] counter" data-target="3.24" data-suffix="%">0%</p>
+          <p class="text-sm text-[var(--text-secondary)] mt-1">Conversion Rate</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        <div class="dashboard-card lg:col-span-2">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-base font-semibold text-[var(--text-primary)]">Revenue Overview</h3>
+            <select class="form-input w-auto text-xs py-1.5 px-3" onchange="updateRevenueChart(this.value)">
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+            </select>
+          </div>
+          <div class="chart-container"><canvas id="revenueChart"></canvas></div>
+        </div>
+        <div class="dashboard-card">
+          <h3 class="text-base font-semibold text-[var(--text-primary)] mb-4">Traffic Sources</h3>
+          <div class="chart-container" style="height:200px;"><canvas id="trafficChart"></canvas></div>
+          <div class="mt-4 space-y-2">
+            <div class="flex items-center justify-between text-sm"><div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-primary-500"></span><span class="text-[var(--text-secondary)]">Direct</span></div><span class="font-semibold text-[var(--text-primary)]">42%</span></div>
+            <div class="flex items-center justify-between text-sm"><div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-emerald-500"></span><span class="text-[var(--text-secondary)]">Organic</span></div><span class="font-semibold text-[var(--text-primary)]">28%</span></div>
+            <div class="flex items-center justify-between text-sm"><div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-amber-500"></span><span class="text-[var(--text-secondary)]">Social</span></div><span class="font-semibold text-[var(--text-primary)]">18%</span></div>
+            <div class="flex items-center justify-between text-sm"><div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-rose-500"></span><span class="text-[var(--text-secondary)]">Referral</span></div><span class="font-semibold text-[var(--text-primary)]">12%</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="dashboard-card">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+          <h3 class="text-base font-semibold text-[var(--text-primary)]">Recent Customers</h3>
+          <input type="text" id="customerSearch" placeholder="Search customers..." class="form-input text-sm w-full sm:w-56" onkeyup="filterCustomers()">
+        </div>
+        <div class="overflow-x-auto -mx-5 px-5">
+          <table class="data-table min-w-[640px]">
+            <thead><tr>
+              <th onclick="sortTable('name')">Customer</th>
+              <th onclick="sortTable('email')">Email</th>
+              <th onclick="sortTable('status')">Status</th>
+              <th onclick="sortTable('role')">Role</th>
+              <th onclick="sortTable('date')">Joined</th>
+              <th class="text-right">Actions</th>
+            </tr></thead>
+            <tbody id="customersTableBody"></tbody>
+          </table>
+        </div>
+        <div class="flex items-center justify-between mt-4 pt-4 border-t border-[var(--border-color)]">
+          <p class="text-sm text-[var(--text-secondary)]" id="paginationInfo">Showing 1-5 of 24</p>
+          <div class="flex items-center gap-1" id="paginationControls"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ANALYTICS SECTION -->
+    <div id="section-analytics" class="section-content">
+      <div class="mb-6">
+        <h1 class="text-2xl font-bold text-[var(--text-primary)]">Analytics</h1>
+        <p class="text-sm text-[var(--text-secondary)] mt-1">Detailed insights into your business performance.</p>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <div class="dashboard-card">
+          <h3 class="text-base font-semibold text-[var(--text-primary)] mb-4">User Growth</h3>
+          <div class="chart-container"><canvas id="userGrowthChart"></canvas></div>
+        </div>
+        <div class="dashboard-card">
+          <h3 class="text-base font-semibold text-[var(--text-primary)] mb-4">Sales by Category</h3>
+          <div class="chart-container"><canvas id="salesCategoryChart"></canvas></div>
+        </div>
+      </div>
+      <div class="dashboard-card">
+        <h3 class="text-base font-semibold text-[var(--text-primary)] mb-4">Performance Metrics</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="text-center p-4 rounded-xl bg-[var(--bg-body)]"><p class="text-2xl font-bold text-primary-600 dark:text-primary-400">98.2%</p><p class="text-xs text-[var(--text-secondary)] mt-1">Uptime</p></div>
+          <div class="text-center p-4 rounded-xl bg-[var(--bg-body)]"><p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">1.2s</p><p class="text-xs text-[var(--text-secondary)] mt-1">Avg Load</p></div>
+          <div class="text-center p-4 rounded-xl bg-[var(--bg-body)]"><p class="text-2xl font-bold text-amber-600 dark:text-amber-400">4.8</p><p class="text-xs text-[var(--text-secondary)] mt-1">CSAT Score</p></div>
+          <div class="text-center p-4 rounded-xl bg-[var(--bg-body)]"><p class="text-2xl font-bold text-rose-600 dark:text-rose-400">2.4%</p><p class="text-xs text-[var(--text-secondary)] mt-1">Churn Rate</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CUSTOMERS SECTION -->
+    <div id="section-customers" class="section-content">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-2xl font-bold text-[var(--text-primary)]">Customers</h1>
+          <p class="text-sm text-[var(--text-secondary)] mt-1">Manage your customer base.</p>
+        </div>
+        <button onclick="openModal('addCustomerModal')" class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+          Add Customer
+        </button>
+      </div>
+      <div class="dashboard-card">
+        <div class="overflow-x-auto">
+          <table class="data-table min-w-[640px]">
+            <thead><tr><th>Customer</th><th>Email</th><th>Status</th><th>Role</th><th>Joined</th><th class="text-right">Actions</th></tr></thead>
+            <tbody id="allCustomersTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ORDERS SECTION -->
+    <div id="section-orders" class="section-content">
+      <div class="mb-6">
+        <h1 class="text-2xl font-bold text-[var(--text-primary)]">Orders</h1>
+        <p class="text-sm text-[var(--text-secondary)] mt-1">Track and manage all orders.</p>
+      </div>
+      <div class="dashboard-card">
+        <div class="overflow-x-auto">
+          <table class="data-table min-w-[640px]">
+            <thead><tr><th>Order ID</th><th>Customer</th><th>Product</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
+            <tbody id="ordersTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRODUCTS SECTION -->
+    <div id="section-products" class="section-content">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-2xl font-bold text-[var(--text-primary)]">Products</h1>
+          <p class="text-sm text-[var(--text-secondary)] mt-1">Manage your product catalog.</p>
+        </div>
+        <button onclick="showToast('Add Product feature coming soon','info')" class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+          Add Product
+        </button>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="productsGrid"></div>
+    </div>
+
+    <!-- SETTINGS SECTION -->
+    <div id="section-settings" class="section-content">
+      <div class="mb-6">
+        <h1 class="text-2xl font-bold text-[var(--text-primary)]">Settings</h1>
+        <p class="text-sm text-[var(--text-secondary)] mt-1">Manage your account and preferences.</p>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="lg:col-span-2 space-y-4">
+          <div class="dashboard-card">
+            <h3 class="text-base font-semibold text-[var(--text-primary)] mb-4">Profile Information</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="form-group"><label class="form-label">First Name</label><input type="text" class="form-input" value="John"></div>
+              <div class="form-group"><label class="form-label">Last Name</label><input type="text" class="form-input" value="Doe"></div>
+              <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" value="john@example.com"></div>
+              <div class="form-group"><label class="form-label">Phone</label><input type="tel" class="form-input" value="+1 234 567 890"></div>
+            </div>
+            <div class="form-group"><label class="form-label">Bio</label><textarea class="form-input" rows="3">Product manager and full-stack developer based in San Francisco.</textarea></div>
+            <div class="flex justify-end"><button onclick="showToast('Profile updated successfully','success')" class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition-colors">Save Changes</button></div>
+          </div>
+          <div class="dashboard-card">
+            <h3 class="text-base font-semibold text-[var(--text-primary)] mb-4">Notifications</h3>
+            <div class="space-y-3">
+              <label class="flex items-center justify-between cursor-pointer"><div><p class="text-sm font-medium text-[var(--text-primary)]">Email Notifications</p><p class="text-xs text-[var(--text-secondary)]">Receive updates via email</p></div><input type="checkbox" checked class="w-5 h-5 rounded border-[var(--border-color)] text-primary-600 focus:ring-primary-500"></label>
+              <label class="flex items-center justify-between cursor-pointer"><div><p class="text-sm font-medium text-[var(--text-primary)]">Push Notifications</p><p class="text-xs text-[var(--text-secondary)]">Receive browser push notifications</p></div><input type="checkbox" checked class="w-5 h-5 rounded border-[var(--border-color)] text-primary-600 focus:ring-primary-500"></label>
+              <label class="flex items-center justify-between cursor-pointer"><div><p class="text-sm font-medium text-[var(--text-primary)]">Marketing Emails</p><p class="text-xs text-[var(--text-secondary)]">Receive promotional content</p></div><input type="checkbox" class="w-5 h-5 rounded border-[var(--border-color)] text-primary-600 focus:ring-primary-500"></label>
+            </div>
+          </div>
+        </div>
+        <div class="space-y-4">
+          <div class="dashboard-card text-center">
+            <div class="w-20 h-20 mx-auto rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400 font-bold text-2xl mb-3">JD</div>
+            <h3 class="text-base font-semibold text-[var(--text-primary)]">John Doe</h3>
+            <p class="text-sm text-[var(--text-secondary)]">Admin</p>
+            <button class="mt-4 px-4 py-2 border border-[var(--border-color)] text-sm font-medium rounded-lg hover:bg-[var(--bg-body)] transition-colors text-[var(--text-primary)]">Change Avatar</button>
+          </div>
+          <div class="dashboard-card">
+            <h3 class="text-base font-semibold text-[var(--text-primary)] mb-3">Danger Zone</h3>
+            <p class="text-sm text-[var(--text-secondary)] mb-4">Once you delete your account, there is no going back.</p>
+            <button onclick="showToast('This is a demo. Account deletion disabled.','error')" class="w-full px-4 py-2 border border-red-300 text-red-600 text-sm font-medium rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">Delete Account</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- Add Customer Modal -->
+<div class="modal-overlay" id="addCustomerModal" onclick="if(event.target===this)closeModal('addCustomerModal')">
+  <div class="modal-content">
+    <div class="flex items-center justify-between p-5 border-b border-[var(--border-color)]">
+      <h3 class="text-lg font-semibold text-[var(--text-primary)]">Add New Customer</h3>
+      <button onclick="closeModal('addCustomerModal')" class="p-1 rounded-lg hover:bg-[var(--bg-body)] text-[var(--text-secondary)]"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+    </div>
+    <form id="addCustomerForm" onsubmit="handleAddCustomer(event)" class="p-5">
+      <div class="form-group"><label class="form-label">Full Name</label><input type="text" name="name" required class="form-input" placeholder="e.g. Jane Smith"></div>
+      <div class="form-group"><label class="form-label">Email</label><input type="email" name="email" required class="form-input" placeholder="jane@example.com"></div>
+      <div class="grid grid-cols-2 gap-4">
+        <div class="form-group"><label class="form-label">Status</label><select name="status" class="form-input"><option value="Active">Active</option><option value="Inactive">Inactive</option><option value="Pending">Pending</option></select></div>
+        <div class="form-group"><label class="form-label">Role</label><select name="role" class="form-input"><option value="Customer">Customer</option><option value="Admin">Admin</option><option value="Editor">Editor</option></select></div>
+      </div>
+      <div class="flex justify-end gap-3 mt-2">
+        <button type="button" onclick="closeModal('addCustomerModal')" class="px-4 py-2 border border-[var(--border-color)] text-sm font-medium rounded-lg hover:bg-[var(--bg-body)] transition-colors text-[var(--text-primary)]">Cancel</button>
+        <button type="submit" class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition-colors">Add Customer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit Customer Modal -->
+<div class="modal-overlay" id="editCustomerModal" onclick="if(event.target===this)closeModal('editCustomerModal')">
+  <div class="modal-content">
+    <div class="flex items-center justify-between p-5 border-b border-[var(--border-color)]">
+      <h3 class="text-lg font-semibold text-[var(--text-primary)]">Edit Customer</h3>
+      <button onclick="closeModal('editCustomerModal')" class="p-1 rounded-lg hover:bg-[var(--bg-body)] text-[var(--text-secondary)]"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+    </div>
+    <form id="editCustomerForm" onsubmit="handleEditCustomer(event)" class="p-5">
+      <input type="hidden" name="id" id="editCustomerId">
+      <div class="form-group"><label class="form-label">Full Name</label><input type="text" name="name" id="editCustomerName" required class="form-input"></div>
+      <div class="form-group"><label class="form-label">Email</label><input type="email" name="email" id="editCustomerEmail" required class="form-input"></div>
+      <div class="grid grid-cols-2 gap-4">
+        <div class="form-group"><label class="form-label">Status</label><select name="status" id="editCustomerStatus" class="form-input"><option value="Active">Active</option><option value="Inactive">Inactive</option><option value="Pending">Pending</option></select></div>
+        <div class="form-group"><label class="form-label">Role</label><select name="role" id="editCustomerRole" class="form-input"><option value="Customer">Customer</option><option value="Admin">Admin</option><option value="Editor">Editor</option></select></div>
+      </div>
+      <div class="flex justify-end gap-3 mt-2">
+        <button type="button" onclick="closeModal('editCustomerModal')" class="px-4 py-2 border border-[var(--border-color)] text-sm font-medium rounded-lg hover:bg-[var(--bg-body)] transition-colors text-[var(--text-primary)]">Cancel</button>
+        <button type="submit" class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition-colors">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal-overlay" id="deleteModal" onclick="if(event.target===this)closeModal('deleteModal')">
+  <div class="modal-content" style="max-width:400px;">
+    <div class="p-5 text-center">
+      <div class="w-12 h-12 mx-auto rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-4">
+        <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+      </div>
+      <h3 class="text-lg font-semibold text-[var(--text-primary)] mb-2">Delete Customer</h3>
+      <p class="text-sm text-[var(--text-secondary)] mb-5">Are you sure you want to delete this customer? This action cannot be undone.</p>
+      <div class="flex justify-center gap-3">
+        <button onclick="closeModal('deleteModal')" class="px-4 py-2 border border-[var(--border-color)] text-sm font-medium rounded-lg hover:bg-[var(--bg-body)] transition-colors text-[var(--text-primary)]">Cancel</button>
+        <button onclick="confirmDelete()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition-colors">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+
+// ===================== DATA =====================
+let customers = JSON.parse(localStorage.getItem('dashboard_customers')) || [
+  {id:1,name:"Sarah Johnson",email:"sarah.j@example.com",status:"Active",role:"Customer",date:"2024-01-15"},
+  {id:2,name:"Michael Chen",email:"m.chen@example.com",status:"Active",role:"Admin",date:"2024-02-03"},
+  {id:3,name:"Emily Davis",email:"emily.d@example.com",status:"Pending",role:"Editor",date:"2024-02-20"},
+  {id:4,name:"James Wilson",email:"j.wilson@example.com",status:"Inactive",role:"Customer",date:"2024-03-08"},
+  {id:5,name:"Anna Brown",email:"anna.b@example.com",status:"Active",role:"Customer",date:"2024-03-15"},
+  {id:6,name:"David Lee",email:"david.lee@example.com",status:"Active",role:"Editor",date:"2024-04-01"},
+  {id:7,name:"Lisa Garcia",email:"lisa.g@example.com",status:"Pending",role:"Customer",date:"2024-04-12"},
+  {id:8,name:"Robert Taylor",email:"rob.t@example.com",status:"Active",role:"Admin",date:"2024-04-18"},
+  {id:9,name:"Jennifer Martinez",email:"jen.m@example.com",status:"Inactive",role:"Customer",date:"2024-05-02"},
+  {id:10,name:"Chris Anderson",email:"chris.a@example.com",status:"Active",role:"Editor",date:"2024-05-10"},
+  {id:11,name:"Amanda White",email:"amanda.w@example.com",status:"Active",role:"Customer",date:"2024-05-22"},
+  {id:12,name:"Daniel Thomas",email:"dan.t@example.com",status:"Pending",role:"Customer",date:"2024-06-01"},
+  {id:13,name:"Michelle Jackson",email:"michelle.j@example.com",status:"Active",role:"Admin",date:"2024-06-15"},
+  {id:14,name:"Kevin Harris",email:"kevin.h@example.com",status:"Inactive",role:"Editor",date:"2024-06-28"},
+  {id:15,name:"Rachel Clark",email:"rachel.c@example.com",status:"Active",role:"Customer",date:"2024-07-05"},
+  {id:16,name:"Mark Lewis",email:"mark.l@example.com",status:"Active",role:"Customer",date:"2024-07-12"},
+  {id:17,name:"Laura Robinson",email:"laura.r@example.com",status:"Pending",role:"Editor",date:"2024-07-20"},
+  {id:18,name:"Steven Walker",email:"steve.w@example.com",status:"Active",role:"Admin",date:"2024-07-25"},
+  {id:19,name:"Nicole Hall",email:"nicole.h@example.com",status:"Inactive",role:"Customer",date:"2024-08-01"},
+  {id:20,name:"Brian Allen",email:"brian.a@example.com",status:"Active",role:"Customer",date:"2024-08-08"},
+  {id:21,name:"Stephanie Young",email:"steph.y@example.com",status:"Active",role:"Editor",date:"2024-08-10"},
+  {id:22,name:"Jason King",email:"jason.k@example.com",status:"Pending",role:"Customer",date:"2024-08-12"},
+  {id:23,name:"Melissa Wright",email:"melissa.w@example.com",status:"Active",role:"Admin",date:"2024-08-14"},
+  {id:24,name:"Ryan Lopez",email:"ryan.l@example.com",status:"Active",role:"Customer",date:"2024-08-15"}
+];
+
+const orders = [
+  {id:"#ORD-001",customer:"Sarah Johnson",product:"Pro Plan",amount:"$99.00",status:"Completed",date:"2024-08-18"},
+  {id:"#ORD-002",customer:"Michael Chen",product:"Basic Plan",amount:"$29.00",status:"Processing",date:"2024-08-18"},
+  {id:"#ORD-003",customer:"Emily Davis",product:"Enterprise",amount:"$299.00",status:"Completed",date:"2024-08-17"},
+  {id:"#ORD-004",customer:"James Wilson",product:"Pro Plan",amount:"$99.00",status:"Pending",date:"2024-08-17"},
+  {id:"#ORD-005",customer:"Anna Brown",product:"Basic Plan",amount:"$29.00",status:"Completed",date:"2024-08-16"},
+  {id:"#ORD-006",customer:"David Lee",product:"Pro Plan",amount:"$99.00",status:"Cancelled",date:"2024-08-16"},
+  {id:"#ORD-007",customer:"Lisa Garcia",product:"Enterprise",amount:"$299.00",status:"Completed",date:"2024-08-15"},
+  {id:"#ORD-008",customer:"Robert Taylor",product:"Basic Plan",amount:"$29.00",status:"Processing",date:"2024-08-15"}
+];
+
+const products = [
+  {name:"Pro Dashboard",price:"$99",sales:124,stock:45,image:"bg-primary-500"},
+  {name:"Analytics Suite",price:"$149",sales:89,stock:23,image:"bg-emerald-500"},
+  {name:"CRM Toolkit",price:"$79",sales:203,stock:67,image:"bg-amber-500"},
+  {name:"Invoice Builder",price:"$49",sales:156,stock:12,image:"bg-rose-500"},
+  {name:"User Manager",price:"$69",sales:98,stock:34,image:"bg-purple-500"},
+  {name:"Report Engine",price:"$129",sales:76,stock:8,image:"bg-cyan-500"}
+];
+
+let currentPage = 1;
+const itemsPerPage = 5;
+let sortField = 'date';
+let sortDir = 'desc';
+let deleteTargetId = null;
+let revenueChartInstance = null;
+let trafficChartInstance = null;
+let userGrowthChartInstance = null;
+let salesCategoryChartInstance = null;
+
+// ===================== UTILITIES =====================
+function saveCustomers() { localStorage.setItem('dashboard_customers', JSON.stringify(customers)); }
+function getInitials(name) { return name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2); }
+function formatDate(dateStr) { const d=new Date(dateStr); return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
+
+function getStatusBadge(status) {
+  const map = {Active:'badge-green',Inactive:'badge-red',Pending:'badge-yellow',Completed:'badge-green',Processing:'badge-blue',Cancelled:'badge-red'};
+  return `<span class="badge ${map[status]||'badge-blue'}">${status}</span>`;
+}
+
+function showToast(message, type) {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  const colors = {success:'text-emerald-500',error:'text-red-500',info:'text-primary-500'};
+  const icons = {
+    success:'<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>',
+    error:'<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>',
+    info:'<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>'
+  };
+  toast.innerHTML = `<svg class="w-5 h-5 ${colors[type]} flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">${icons[type]}</svg><span class="text-[var(--text-primary)]">${message}</span>`;
+  container.appendChild(toast);
+  setTimeout(()=>{ toast.style.animation='slideOut 0.3s ease forwards'; setTimeout(()=>toast.remove(),300); }, 3000);
+}
+
+function openModal(id) { document.getElementById(id).classList.add('open'); document.body.style.overflow='hidden'; }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); document.body.style.overflow=''; }
+
+function toggleDropdown(id) {
+  document.querySelectorAll('.dropdown-menu').forEach(d=>{ if(d.id!==id) d.classList.remove('open'); });
+  document.getElementById(id).classList.toggle('open');
+}
+
+document.addEventListener('click', (e)=>{
+  if(!e.target.closest('.dropdown-menu') && !e.target.closest('button[onclick^="toggleDropdown"]')) {
+    document.querySelectorAll('.dropdown-menu').forEach(d=>d.classList.remove('open'));
+  }
+});
+
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  const ov = document.getElementById('sidebarOverlay');
+  sb.classList.toggle('open');
+  ov.classList.toggle('open');
+}
+
+function toggleSidebarCollapse() {
+  document.getElementById('sidebar').classList.toggle('collapsed');
+}
+
+function toggleTheme() {
+  const html = document.documentElement;
+  html.classList.toggle('dark');
+  localStorage.setItem('theme', html.classList.contains('dark')?'dark':'light');
+  updateChartColors();
+}
+
+if(localStorage.getItem('theme')==='dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme:dark)').matches)) {
+  document.documentElement.classList.add('dark');
+}
+
+function switchSection(sectionId, navEl) {
+  document.querySelectorAll('.section-content').forEach(s=>s.classList.remove('active'));
+  document.getElementById('section-'+sectionId).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  if(navEl) navEl.classList.add('active');
+  if(window.innerWidth<1024) toggleSidebar();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// ===================== TABLE FUNCTIONS =====================
+function getSortedCustomers() {
+  let data = [...customers];
+  if(document.getElementById('customerSearch')?.value) {
+    const q = document.getElementById('customerSearch').value.toLowerCase();
+    data = data.filter(c=>c.name.toLowerCase().includes(q)||c.email.toLowerCase().includes(q)||c.status.toLowerCase().includes(q)||c.role.toLowerCase().includes(q));
+  }
+  data.sort((a,b)=>{
+    let av = a[sortField], bv = b[sortField];
+    if(sortField==='date') { av=new Date(av); bv=new Date(bv); }
+    if(av<bv) return sortDir==='asc'?-1:1;
+    if(av>bv) return sortDir==='asc'?1:-1;
+    return 0;
+  });
+  return data;
+}
+
+function renderCustomersTable(tbodyId, data, page, perPage) {
+  const tbody = document.getElementById(tbodyId);
+  if(!tbody) return;
+  const start = (page-1)*perPage;
+  const pageData = data.slice(start, start+perPage);
+  tbody.innerHTML = pageData.map(c=>`
+    <tr>
+      <td><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400 font-bold text-xs">${getInitials(c.name)}</div><span class="font-medium">${c.name}</span></div></td>
+      <td class="text-[var(--text-secondary)]">${c.email}</td>
+      <td>${getStatusBadge(c.status)}</td>
+      <td class="text-[var(--text-secondary)]">${c.role}</td>
+      <td class="text-[var(--text-secondary)]">${formatDate(c.date)}</td>
+      <td class="text-right">
+        <button onclick="openEditModal(${c.id})" class="p-1.5 rounded-lg hover:bg-[var(--bg-body)] text-[var(--text-secondary)] hover:text-primary-600 transition-colors" title="Edit"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg></button>
+        <button onclick="openDeleteModal(${c.id})" class="p-1.5 rounded-lg hover:bg-[var(--bg-body)] text-[var(--text-secondary)] hover:text-red-500 transition-colors" title="Delete"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderPagination(totalItems) {
+  const totalPages = Math.ceil(totalItems/itemsPerPage);
+  const info = document.getElementById('paginationInfo');
+  const controls = document.getElementById('paginationControls');
+  if(info) info.textContent = `Showing ${(currentPage-1)*itemsPerPage+1}-${Math.min(currentPage*itemsPerPage,totalItems)} of ${totalItems}`;
+  if(!controls) return;
+  let html = `<button class="pagination-btn" onclick="changePage(${currentPage-1})" ${currentPage===1?'disabled':''}><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg></button>`;
+  for(let i=1;i<=totalPages;i++) {
+    if(i===1 || i===totalPages || (i>=currentPage-1 && i<=currentPage+1)) {
+      html += `<button class="pagination-btn ${i===currentPage?'active':''}" onclick="changePage(${i})">${i}</button>`;
+    } else if(i===currentPage-2 || i===currentPage+2) {
+      html += `<span class="px-2 text-[var(--text-secondary)]">...</span>`;
+    }
+  }
+  html += `<button class="pagination-btn" onclick="changePage(${currentPage+1})" ${currentPage===totalPages?'disabled':''}><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg></button>`;
+  controls.innerHTML = html;
+}
+
+function changePage(p) {
+  const total = getSortedCustomers().length;
+  const totalPages = Math.ceil(total/itemsPerPage);
+  if(p<1 || p>totalPages) return;
+  currentPage = p;
+  refreshTables();
+}
+
+function sortTable(field) {
+  if(sortField===field) sortDir = sortDir==='asc'?'desc':'asc';
+  else { sortField=field; sortDir='asc'; }
+  currentPage = 1;
+  refreshTables();
+}
+
+function filterCustomers() {
+  currentPage = 1;
+  refreshTables();
+}
+
+function refreshTables() {
+  const data = getSortedCustomers();
+  renderCustomersTable('customersTableBody', data, currentPage, itemsPerPage);
+  renderCustomersTable('allCustomersTableBody', data, 1, 999);
+  renderPagination(data.length);
+}
+
+function handleAddCustomer(e) {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const newCustomer = {
+    id: Date.now(),
+    name: fd.get('name'),
+    email: fd.get('email'),
+    status: fd.get('status'),
+    role: fd.get('role'),
+    date: new Date().toISOString().split('T')[0]
+  };
+  customers.unshift(newCustomer);
+  saveCustomers();
+  refreshTables();
+  closeModal('addCustomerModal');
+  e.target.reset();
+  showToast('Customer added successfully', 'success');
+}
+
+function openEditModal(id) {
+  const c = customers.find(x=>x.id===id);
+  if(!c) return;
+  document.getElementById('editCustomerId').value = c.id;
+  document.getElementById('editCustomerName').value = c.name;
+  document.getElementById('editCustomerEmail').value = c.email;
+  document.getElementById('editCustomerStatus').value = c.status;
+  document.getElementById('editCustomerRole').value = c.role;
+  openModal('editCustomerModal');
+}
+
+function handleEditCustomer(e) {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const id = parseInt(fd.get('id'));
+  const idx = customers.findIndex(c=>c.id===id);
+  if(idx===-1) return;
+  customers[idx] = {...customers[idx], name:fd.get('name'), email:fd.get('email'), status:fd.get('status'), role:fd.get('role')};
+  saveCustomers();
+  refreshTables();
+  closeModal('editCustomerModal');
+  showToast('Customer updated successfully', 'success');
+}
+
+function openDeleteModal(id) { deleteTargetId=id; openModal('deleteModal'); }
+function confirmDelete() {
+  if(!deleteTargetId) return;
+  customers = customers.filter(c=>c.id!==deleteTargetId);
+  saveCustomers();
+  refreshTables();
+  closeModal('deleteModal');
+  deleteTargetId = null;
+  showToast('Customer deleted successfully', 'success');
+}
+
+function handleGlobalSearch(e) {
+  if(e.key==='Enter') {
+    const q = e.target.value.toLowerCase();
+    if(q) {
+      document.getElementById('customerSearch').value = q;
+      filterCustomers();
+      switchSection('customers', document.querySelectorAll('.nav-item')[2]);
+    }
+  }
+}
+
+// ===================== CHARTS =====================
+function getChartColors() {
+  const isDark = document.documentElement.classList.contains('dark');
+  return {
+    grid: isDark ? 'rgba(148,163,184,0.1)' : 'rgba(148,163,184,0.2)',
+    text: isDark ? '#94a3b8' : '#64748b',
+    tooltipBg: isDark ? '#1e293b' : '#ffffff',
+    tooltipText: isDark ? '#f8fafc' : '#0f172a'
+  };
+}
+
+function initRevenueChart() {
+  const ctx = document.getElementById('revenueChart');
+  if(!ctx) return;
+  const c = getChartColors();
+  revenueChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+      datasets: [{
+        label: 'Revenue',
+        data: [4200,5100,4800,6200,5800,7100,6500],
+        borderColor: '#6366f1',
+        backgroundColor: 'rgba(99,102,241,0.1)',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.4,
+        pointRadius: 4,
+        pointBackgroundColor: '#6366f1',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: c.tooltipBg,
+          titleColor: c.tooltipText,
+          bodyColor: c.tooltipText,
+          borderColor: c.grid,
+          borderWidth: 1,
+          padding: 10,
+          cornerRadius: 8,
+          displayColors: false,
+          callbacks: { label: (ctx)=>`$${ctx.raw.toLocaleString()}` }
+        }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: c.text, font: {size:11} } },
+        y: { grid: { color: c.grid }, ticks: { color: c.text, font: {size:11}, callback:(v)=>'$'+v/1000+'k' } }
+      }
+    }
+  });
+}
+
+function updateRevenueChart(days) {
+  if(!revenueChartInstance) return;
+  const dataMap = {
+    '7': {labels:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'], data:[4200,5100,4800,6200,5800,7100,6500]},
+    '30': {labels:['Week 1','Week 2','Week 3','Week 4'], data:[28500,32200,29800,35600]},
+    '90': {labels:['Jan','Feb','Mar'], data:[98000,112000,105000]}
+  };
+  const d = dataMap[days];
+  revenueChartInstance.data.labels = d.labels;
+  revenueChartInstance.data.datasets[0].data = d.data;
+  revenueChartInstance.update();
+}
+
+function initTrafficChart() {
+  const ctx = document.getElementById('trafficChart');
+  if(!ctx) return;
+  const c = getChartColors();
+  trafficChartInstance = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Direct','Organic','Social','Referral'],
+      datasets: [{
+        data: [42,28,18,12],
+        backgroundColor: ['#6366f1','#10b981','#f59e0b','#f43f5e'],
+        borderWidth: 0,
+        hoverOffset: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '70%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: c.tooltipBg,
+          titleColor: c.tooltipText,
+          bodyColor: c.tooltipText,
+          borderColor: c.grid,
+          borderWidth: 1,
+          padding: 10,
+          cornerRadius: 8,
+          callbacks: { label: (ctx)=>`${ctx.label}: ${ctx.raw}%` }
+        }
+      }
+    }
+  });
+}
+
+function initUserGrowthChart() {
+  const ctx = document.getElementById('userGrowthChart');
+  if(!ctx) return;
+  const c = getChartColors();
+  userGrowthChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Jan','Feb','Mar','Apr','May','Jun'],
+      datasets: [{
+        label: 'New Users',
+        data: [320,450,380,520,610,580],
+        backgroundColor: '#6366f1',
+        borderRadius: 6,
+        barThickness: 24
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: c.tooltipBg,
+          titleColor: c.tooltipText,
+          bodyColor: c.tooltipText,
+          borderColor: c.grid,
+          borderWidth: 1,
+          padding: 10,
+          cornerRadius: 8
+        }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: c.text, font: {size:11} } },
+        y: { grid: { color: c.grid }, ticks: { color: c.text, font: {size:11} } }
+      }
+    }
+  });
+}
+
+function initSalesCategoryChart() {
+  const ctx = document.getElementById('salesCategoryChart');
+  if(!ctx) return;
+  const c = getChartColors();
+  salesCategoryChartInstance = new Chart(ctx, {
+    type: 'polarArea',
+    data: {
+      labels: ['SaaS','E-commerce','Services','Consulting','Other'],
+      datasets: [{
+        data: [35,25,20,12,8],
+        backgroundColor: ['rgba(99,102,241,0.7)','rgba(16,185,129,0.7)','rgba(245,158,11,0.7)','rgba(244,63,94,0.7)','rgba(139,92,246,0.7)'],
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { color: c.text, font: {size:11}, padding: 15, usePointStyle: true, pointStyle: 'circle' }
+        },
+        tooltip: {
+          backgroundColor: c.tooltipBg,
+          titleColor: c.tooltipText,
+          bodyColor: c.tooltipText,
+          borderColor: c.grid,
+          borderWidth: 1,
+          padding: 10,
+          cornerRadius: 8,
+          callbacks: { label: (ctx)=>`${ctx.label}: ${ctx.raw}%` }
+        }
+      },
+      scales: {
+        r: { grid: { color: c.grid }, ticks: { display: false, backdropColor: 'transparent' } }
+      }
+    }
+  });
+}
+
+function updateChartColors() {
+  const c = getChartColors();
+  [revenueChartInstance, trafficChartInstance, userGrowthChartInstance, salesCategoryChartInstance].forEach(chart=>{
+    if(!chart) return;
+    if(chart.options.scales?.x?.ticks) chart.options.scales.x.ticks.color = c.text;
+    if(chart.options.scales?.y?.ticks) chart.options.scales.y.ticks.color = c.text;
+    if(chart.options.scales?.x?.grid) chart.options.scales.x.grid.color = c.grid;
+    if(chart.options.scales?.y?.grid) chart.options.scales.y.grid.color = c.grid;
+    if(chart.options.scales?.r?.grid) chart.options.scales.r.grid.color = c.grid;
+    if(chart.options.plugins?.legend?.labels) chart.options.plugins.legend.labels.color = c.text;
+    if(chart.options.plugins?.tooltip) {
+      chart.options.plugins.tooltip.backgroundColor = c.tooltipBg;
+      chart.options.plugins.tooltip.titleColor = c.tooltipText;
+      chart.options.plugins.tooltip.bodyColor = c.tooltipText;
+      chart.options.plugins.tooltip.borderColor = c.grid;
+    }
+    chart.update();
+  });
+}
+
+// ===================== ORDERS & PRODUCTS =====================
+function renderOrders() {
+  const tbody = document.getElementById('ordersTableBody');
+  if(!tbody) return;
+  tbody.innerHTML = orders.map(o=>`
+    <tr>
+      <td class="font-medium">${o.id}</td>
+      <td class="text-[var(--text-secondary)]">${o.customer}</td>
+      <td class="text-[var(--text-secondary)]">${o.product}</td>
+      <td class="font-medium">${o.amount}</td>
+      <td>${getStatusBadge(o.status)}</td>
+      <td class="text-[var(--text-secondary)]">${formatDate(o.date)}</td>
+    </tr>
+  `).join('');
+}
+
+function renderProducts() {
+  const grid = document.getElementById('productsGrid');
+  if(!grid) return;
+  grid.innerHTML = products.map(p=>`
+    <div class="dashboard-card group cursor-pointer">
+      <div class="flex items-start justify-between mb-4">
+        <div class="w-12 h-12 rounded-xl ${p.image} flex items-center justify-center shadow-lg">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+        </div>
+        <span class="text-lg font-bold text-[var(--text-primary)]">${p.price}</span>
+      </div>
+      <h3 class="font-semibold text-[var(--text-primary)] mb-1">${p.name}</h3>
+      <div class="flex items-center justify-between text-sm text-[var(--text-secondary)]">
+        <span>${p.sales} sales</span>
+        <span>${p.stock} in stock</span>
+      </div>
+      <div class="mt-3 w-full bg-[var(--bg-body)] rounded-full h-1.5 overflow-hidden">
+        <div class="bg-primary-500 h-full rounded-full transition-all duration-500" style="width:${Math.min(p.sales/3,100)}%"></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ===================== COUNTER ANIMATION =====================
+function animateCounters() {
+  document.querySelectorAll('.counter').forEach(el=>{
+    const target = parseFloat(el.dataset.target);
+    const prefix = el.dataset.prefix || '';
+    const suffix = el.dataset.suffix || '';
+    const duration = 1500;
+    const start = performance.now();
+    const isFloat = target % 1 !== 0;
+    function step(now) {
+      const progress = Math.min((now - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - progress, 3);
+      const current = target * ease;
+      el.textContent = prefix + (isFloat ? current.toFixed(2) : Math.floor(current).toLocaleString()) + suffix;
+      if(progress < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+// ===================== INIT =====================
+document.addEventListener('DOMContentLoaded', ()=>{
+  refreshTables();
+  renderOrders();
+  renderProducts();
+  animateCounters();
+  setTimeout(()=>{
+    initRevenueChart();
+    initTrafficChart();
+    initUserGrowthChart();
+    initSalesCategoryChart();
+  }, 100);
+});
+</script>
+</body>
+</html>
